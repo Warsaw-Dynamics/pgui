@@ -426,8 +426,14 @@ impl CosmicTextSystemState {
             // and emoji fonts often have no Latin glyphs, and they are exactly
             // what cosmic-text falls back to when the primary font lacks a
             // glyph.
+            //
+            // Known colour emoji fonts load anyway, so they can be named in a
+            // font's fallbacks: cosmic-text's own fallback reaches monochrome
+            // fonts first for symbols both have, such as U+2733 (✳).
+            let is_known_emoji_font = check_is_known_emoji_font(&postscript_name);
             if font.as_swash().charmap().map('m') == 0
                 && !allowed_bad_font_names.contains(&postscript_name.as_str())
+                && !is_known_emoji_font
             {
                 continue;
             };
@@ -437,7 +443,7 @@ impl CosmicTextSystemState {
             self.loaded_fonts.push(LoadedFont {
                 font,
                 features: cosmic_features.clone(),
-                is_known_emoji_font: check_is_known_emoji_font(&postscript_name),
+                is_known_emoji_font,
                 user_fallback_chain: Arc::clone(&user_fallback_chain),
             });
             self.loaded_font_ids_by_key.insert(key, font_id);
