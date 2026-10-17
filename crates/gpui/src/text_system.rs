@@ -372,7 +372,12 @@ impl TextSystem {
             return font_id;
         }
         for fallback in &self.fallback_font_stack {
-            if let Ok(font_id) = self.font_id(fallback) {
+            // the stand-in keeps the fallbacks asked for, such as a colour emoji font
+            let fallback = Font {
+                fallbacks: font.fallbacks.clone(),
+                ..fallback.clone()
+            };
+            if let Ok(font_id) = self.font_id(&fallback) {
                 return font_id;
             }
         }
