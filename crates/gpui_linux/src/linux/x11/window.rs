@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): windows opened without focus are not
+// focused when mapped. See this repository's git log for the changes.
+
 use anyhow::{Context as _, anyhow};
 use x11rb::connection::RequestConnection;
 
@@ -60,6 +63,7 @@ x11rb::atom_manager! {
         WM_CHANGE_STATE,
         WM_TRANSIENT_FOR,
         _NET_WM_PID,
+        _NET_WM_USER_TIME,
         _NET_WM_NAME,
         _NET_WM_ICON,
         _NET_WM_STATE,
@@ -574,6 +578,19 @@ impl X11WindowState {
                     &[pid],
                 ),
             )?;
+            // EWMH: a user time of 0 asks the window manager not to focus the window when it is mapped
+            if !params.focus {
+                check_reply(
+                    || "X11 ChangeProperty for _NET_WM_USER_TIME failed.",
+                    xcb.change_property32(
+                        xproto::PropMode::REPLACE,
+                        x_window,
+                        atoms._NET_WM_USER_TIME,
+                        xproto::AtomEnum::CARDINAL,
+                        &[0],
+                    ),
+                )?;
+            }
 
             let reply = get_reply(|| "X11 GetGeometry failed.", xcb.get_geometry(x_window))?;
             if reply.x == 0 && reply.y == 0 {
