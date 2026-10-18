@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): colour emoji fonts can be font fallbacks
+// on Linux. See this repository's git log for the changes.
+
 mod font_fallbacks;
 mod font_features;
 mod line;
