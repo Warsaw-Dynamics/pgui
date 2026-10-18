@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can keep the position it is
+// opened at on X11. See this repository's git log for the changes.
+
 mod app_menu;
 mod keyboard;
 mod keystroke;
@@ -2600,6 +2603,11 @@ pub struct WindowOptions {
     /// the window will be created on the main display
     pub display_id: Option<DisplayId>,
 
+    /// Whether the window manager should keep the origin of `window_bounds` instead of placing the window itself,
+    /// e.g. for a window restored where the user left it. Only X11 window managers place windows themselves; other
+    /// platforms always keep the origin.
+    pub keep_position: bool,
+
     /// The appearance of the window background.
     pub window_background: WindowBackgroundAppearance,
 
@@ -2679,6 +2687,12 @@ pub struct WindowParams {
     #[cfg_attr(feature = "wayland", allow(dead_code))]
     pub display_id: Option<DisplayId>,
 
+    #[cfg_attr(
+        any(feature = "wayland", not(any(target_os = "linux", target_os = "freebsd"))),
+        allow(dead_code)
+    )]
+    pub keep_position: bool,
+
     #[cfg_attr(feature = "wayland", allow(dead_code))]
     pub app_id: Option<String>,
 
@@ -2744,6 +2758,7 @@ impl Default for WindowOptions {
             is_resizable: true,
             is_minimizable: true,
             display_id: None,
+            keep_position: false,
             window_background: WindowBackgroundAppearance::default(),
             icon: None,
             app_id: None,

@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can keep the position it is
+// opened at on X11. See this repository's git log for the changes.
+
 #[cfg(feature = "profiler")]
 use crate::DebugFrameOverlayMode;
 #[cfg(any(feature = "inspector", debug_assertions))]
@@ -1596,6 +1599,7 @@ impl Window {
             is_resizable,
             is_minimizable,
             display_id,
+            keep_position,
             window_background,
             app_id,
             window_min_size,
@@ -1629,6 +1633,7 @@ impl Window {
                 focus,
                 show,
                 display_id,
+                keep_position,
                 window_min_size,
                 app_id: app_id.clone(),
                 icon,

@@ -1,5 +1,5 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): windows opened without focus are not
-// focused when mapped. See this repository's git log for the changes.
+// focused when mapped, and a window can keep the position it is opened at. See this repository's git log for the changes.
 
 use anyhow::{Context as _, anyhow};
 use x11rb::connection::RequestConnection;
@@ -22,7 +22,7 @@ use x11rb::{
     connection::Connection,
     cookie::{Cookie, VoidCookie},
     errors::ConnectionError,
-    properties::{WmHints, WmSizeHints},
+    properties::{WmHints, WmSizeHints, WmSizeHintsSpecification},
     protocol::{
         sync,
         xinput::{self, ConnectionExt as _},
@@ -536,6 +536,8 @@ impl X11WindowState {
             bounds.size.width = 800.into();
             bounds.size.height = 600.into();
         }
+        // a kept position must not move by the 2 px the workaround below adds, or a restored window creeps right
+        let nudge = if params.keep_position { 0 } else { 2 };
 
         check_reply(
             || {
@@ -544,7 +546,7 @@ impl X11WindowState {
                     visual.depth,
                     x_window,
                     visual_set.root,
-                    bounds.origin.x.0 + 2,
+                    bounds.origin.x.0 + nudge,
                     bounds.origin.y.0,
                     bounds.size.width.0,
                     bounds.size.height.0
@@ -554,7 +556,7 @@ impl X11WindowState {
                 visual.depth,
                 x_window,
                 visual_set.root,
-                (bounds.origin.x.0 + 2) as i16,
+                (bounds.origin.x.0 + nudge) as i16,
                 bounds.origin.y.0 as i16,
                 bounds.size.width.0 as u16,
                 bounds.size.height.0 as u16,
@@ -807,6 +809,14 @@ impl X11WindowState {
                     Some((f32::from(size.width) as i32, f32::from(size.height) as i32));
             }
             size_hints.max_size = Some((max_texture_size as i32, max_texture_size as i32));
+            // without a user-specified position the window manager places the window wherever it likes
+            if params.keep_position {
+                size_hints.position = Some((
+                    WmSizeHintsSpecification::UserSpecified,
+                    bounds.origin.x.0,
+                    bounds.origin.y.0,
+                ));
+            }
             check_reply(
                 || {
                     format!(
