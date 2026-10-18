@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage. See this
+// repository's git log for the changes.
+
 use crate::CanvasFontFallback;
 use crate::dispatcher::WebDispatcher;
 use crate::display::WebDisplay;
@@ -383,7 +386,7 @@ impl Platform for WebPlatform {
         match &params.kind {
             WindowKind::Normal => {}
             WindowKind::AnchoredPopup(_) => return Err(PopupNotSupportedError.into()),
-            WindowKind::PopUp => {
+            WindowKind::PopUp | WindowKind::DragImage => {
                 return Err(WebWindowError::UnsupportedWindowKind("popup windows").into());
             }
             WindowKind::Floating => {

@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage. See this
+// repository's git log for the changes.
+
 use crate::{
     BoolExt, MacDisplay, NSRange, NSStringExt, TISCopyCurrentKeyboardInputSource,
     TISGetInputSourceProperty, WindowFrameSource, events::platform_input_from_native,
@@ -1019,7 +1022,7 @@ impl MacWindow {
                 }
                 // `AnchoredPopup` is rejected in `MacPlatform::open_window`, grouped here only
                 // for exhaustiveness.
-                WindowKind::PopUp | WindowKind::AnchoredPopup(_) => {
+                WindowKind::PopUp | WindowKind::DragImage | WindowKind::AnchoredPopup(_) => {
                     style_mask |= NSWindowStyleMaskNonactivatingPanel;
                     msg_send![PANEL_CLASS, alloc]
                 }
@@ -1230,7 +1233,7 @@ impl MacWindow {
                 }
                 // `AnchoredPopup` is rejected in `MacPlatform::open_window`, grouped here only
                 // for exhaustiveness.
-                WindowKind::PopUp | WindowKind::AnchoredPopup(_) => {
+                WindowKind::PopUp | WindowKind::DragImage | WindowKind::AnchoredPopup(_) => {
                     add_mouse_tracking_area(tracking_view);
 
                     native_window.setLevel_(NSPopUpWindowLevel);

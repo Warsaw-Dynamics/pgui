@@ -1,5 +1,5 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can keep the position it is
-// opened at on X11. See this repository's git log for the changes.
+// opened at on X11, and be moved on X11 without being redrawn. See this repository's git log for the changes.
 
 #[cfg(feature = "profiler")]
 use crate::DebugFrameOverlayMode;
@@ -1981,7 +1981,7 @@ impl Window {
             let mut cx = cx.to_async();
             move || {
                 handle
-                    .update(&mut cx, |_, window, cx| window.bounds_changed(cx))
+                    .update(&mut cx, |_, window, cx| window.moved(cx))
                     .log_err();
             }
         }));
@@ -2800,6 +2800,19 @@ impl Window {
         })
     }
 
+    /// A move that kept the size and scale draws nothing new: only the bounds observers hear of it, so a window
+    /// moved at every pointer event (a drag image) is not redrawn each time.
+    fn moved(&mut self, cx: &mut App) {
+        if self.platform_window.scale_factor() != self.scale_factor
+            || self.platform_window.content_size() != self.viewport_size
+        {
+            return self.bounds_changed(cx);
+        }
+        self.bounds_observers
+            .clone()
+            .retain(&(), |callback| callback(self, cx));
+    }
+
     /// Notify the window that its bounds have changed.
     ///
     /// This updates internal state like `viewport_size` and `scale_factor` from
@@ -2913,6 +2926,12 @@ impl Window {
     /// Set the content size of the window.
     pub fn resize(&mut self, size: Size<Pixels>) {
         self.platform_window.resize(size);
+    }
+
+    /// Moves the window's top left to `origin` on the screen, e.g. a pop-up following the pointer. Only X11 moves
+    /// it; a window manager may still place a managed window elsewhere, a pop-up's position is kept.
+    pub fn move_to(&mut self, origin: Point<Pixels>) {
+        self.platform_window.move_to(origin);
     }
 
     /// Returns whether or not the window is currently fullscreen

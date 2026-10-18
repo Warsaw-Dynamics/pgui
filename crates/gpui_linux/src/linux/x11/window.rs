@@ -1,5 +1,6 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): windows opened without focus are not
-// focused when mapped, a window can keep the position it is opened at, and client decorations keep its size. See this repository's git log for the changes.
+// focused when mapped, a window can keep the position it is opened at, can be moved (a move alone is not a
+// resize), can be a drag image, and client decorations keep its size. See this repository's git log for the changes.
 
 use anyhow::{Context as _, anyhow};
 use x11rb::connection::RequestConnection;
@@ -79,6 +80,7 @@ x11rb::atom_manager! {
         _NET_WM_MOVERESIZE,
         _NET_WM_WINDOW_TYPE,
         _NET_WM_WINDOW_TYPE_NOTIFICATION,
+        _NET_WM_WINDOW_TYPE_DND,
         _NET_WM_WINDOW_TYPE_DIALOG,
         _NET_WM_STATE_MODAL,
         _NET_WM_SYNC,
@@ -542,7 +544,7 @@ impl X11WindowState {
             // https://stackoverflow.com/questions/43218127/x11-xlib-xcb-creating-a-window-requires-border-pixel-if-specifying-colormap-wh
             .border_pixel(visual_set.black_pixel)
             .colormap(colormap)
-            .override_redirect((params.kind == WindowKind::PopUp) as u32)
+            .override_redirect(matches!(params.kind, WindowKind::PopUp | WindowKind::DragImage) as u32)
             .event_mask(
                 xproto::EventMask::EXPOSURE
                     | xproto::EventMask::STRUCTURE_NOTIFY
@@ -655,6 +657,19 @@ impl X11WindowState {
                         atoms._NET_WM_NAME,
                         atoms.UTF8_STRING,
                         title.as_bytes(),
+                    ),
+                )?;
+            }
+
+            if params.kind == WindowKind::DragImage {
+                check_reply(
+                    || "X11 ChangeProperty32 setting window type for a drag image failed.",
+                    xcb.change_property32(
+                        xproto::PropMode::REPLACE,
+                        x_window,
+                        atoms._NET_WM_WINDOW_TYPE,
+                        xproto::AtomEnum::ATOM,
+                        &[atoms._NET_WM_WINDOW_TYPE_DND],
                     ),
                 )?;
             }
@@ -1362,9 +1377,12 @@ impl X11WindowStatePtr {
                 state.bounds = bounds;
             }
 
-            let gpu_size = query_render_extent(&self.xcb, self.x_window)?;
-            if let Some(renderer) = &mut state.renderer {
-                renderer.update_drawable_size(gpu_size);
+            // a move keeps the drawable: no round trip to the X server for its size
+            if is_resize {
+                let gpu_size = query_render_extent(&self.xcb, self.x_window)?;
+                if let Some(renderer) = &mut state.renderer {
+                    renderer.update_drawable_size(gpu_size);
+                }
             }
             let result = (is_resize, state.content_size(), state.scale_factor);
             if let Some(value) = state.last_sync_counter.take() {
@@ -1377,7 +1395,7 @@ impl X11WindowStatePtr {
         };
 
         let mut callbacks = self.callbacks.borrow_mut();
-        if let Some(ref mut fun) = callbacks.resize {
+        if is_resize && let Some(ref mut fun) = callbacks.resize {
             fun(content_size, scale_factor)
         }
 
@@ -1511,6 +1529,16 @@ impl PlatformWindow for X11Window {
                     .width(width)
                     .height(height),
             ),
+        )
+        .log_err();
+        xcb_flush(&self.0.xcb);
+    }
+
+    fn move_to(&mut self, origin: Point<Pixels>) {
+        let origin = origin.map(|coordinate| (f32::from(coordinate) * self.0.state.borrow().scale_factor) as i32);
+        check_reply(
+            || format!("X11 ConfigureWindow failed. x: {}, y: {}", origin.x, origin.y),
+            self.0.xcb.configure_window(self.0.x_window, &xproto::ConfigureWindowAux::new().x(origin.x).y(origin.y)),
         )
         .log_err();
         xcb_flush(&self.0.xcb);

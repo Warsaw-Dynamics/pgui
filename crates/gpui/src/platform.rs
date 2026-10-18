@@ -1,5 +1,6 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can keep the position it is
-// opened at on X11. See this repository's git log for the changes.
+// opened at on X11, be moved on X11, and be a drag image (WindowKind::DragImage). See this repository's git log
+// for the changes.
 
 mod app_menu;
 mod keyboard;
@@ -1341,6 +1342,8 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     #[cfg(all(target_os = "linux", feature = "wayland"))]
     fn set_exclusive_edge(&self, _edge: layer_shell::Anchor) {}
     fn set_input_region(&self, _region: Option<&[Bounds<Pixels>]>) {}
+    /// Moves the window's top left to `origin` on the screen; only X11 implements it.
+    fn move_to(&mut self, _origin: Point<Pixels>) {}
     fn window_decorations(&self) -> Decorations {
         Decorations::Server
     }
@@ -2793,6 +2796,11 @@ pub enum WindowKind {
     /// A window that appears above all other windows, usually used for alerts or popups
     /// use sparingly!
     PopUp,
+
+    /// A [`WindowKind::PopUp`] that follows the pointer during a drag, e.g. a picture of what is dragged. On X11
+    /// it is typed as a drag-and-drop icon, which window managers move at once; a pop-up is typed as a
+    /// notification, whose moves KWin animates, so it trails the pointer.
+    DragImage,
 
     /// A parent-anchored, platform-native popup window for menus, comboboxes, context menus and
     /// tooltips. Unlike [`WindowKind::PopUp`], it is positioned relative to a parent window.

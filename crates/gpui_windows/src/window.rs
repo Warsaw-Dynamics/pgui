@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage. See this
+// repository's git log for the changes.
+
 #![deny(unsafe_op_in_unsafe_fn)]
 
 use std::{
@@ -489,7 +492,7 @@ impl WindowsWindow {
                 .unwrap_or(""),
         );
 
-        let (mut dwexstyle, dwstyle) = if params.kind == WindowKind::PopUp {
+        let (mut dwexstyle, dwstyle) = if matches!(params.kind, WindowKind::PopUp | WindowKind::DragImage) {
             (WS_EX_TOOLWINDOW | WS_EX_TOPMOST, WINDOW_STYLE(0x0))
         } else {
             let mut dwstyle = WS_SYSMENU;
