@@ -1,5 +1,5 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): windows opened without focus are not
-// focused when mapped, and a window can keep the position it is opened at. See this repository's git log for the changes.
+// focused when mapped, a window can keep the position it is opened at, and client decorations keep its size. See this repository's git log for the changes.
 
 use anyhow::{Context as _, anyhow};
 use x11rb::connection::RequestConnection;
@@ -295,6 +295,9 @@ pub struct X11WindowState {
     edge_constraints: Option<EdgeConstraints>,
     pub handle: AnyWindowHandle,
     last_insets: [u32; 4],
+    /// set once client decorations first set the insets
+    insets_applied: bool,
+    keep_position: bool,
     accesskit_adapter: Option<accesskit_unix::Adapter>,
 }
 
@@ -404,6 +407,30 @@ where
         .map_err(handle_connection_error)
         .and_then(|response| response.reply().map_err(|reply_error| anyhow!(reply_error)))
         .with_context(failure_context)
+}
+
+/// Grows a window by the insets it first gets, so the visible part keeps the size it was opened with, and the
+/// position too when it is kept. Window managers differ, even KWin from one start to the next, in whether insets set
+/// after mapping grow the window; both end at this geometry. A window placed by the window manager is not moved: its
+/// placement may not have arrived yet.
+fn grow_by_insets(
+    xcb: &XCBConnection,
+    x_window: xproto::Window,
+    state: &X11WindowState,
+    [left, right, top, bottom]: [u32; 4],
+) {
+    let bounds = state.bounds.scale(state.scale_factor);
+    let [x, y] = [bounds.origin.x.0, bounds.origin.y.0].map(|coordinate| coordinate as i32);
+    let [width, height] = [bounds.size.width.0, bounds.size.height.0].map(|side| side as u32);
+    let mut aux = xproto::ConfigureWindowAux::new().width(width + left + right).height(height + top + bottom);
+    if state.keep_position {
+        aux = aux.x(x - left as i32).y(y - top as i32);
+    }
+    check_reply(
+        || "X11 ConfigureWindow to grow a window by its insets failed.",
+        xcb.configure_window(x_window, &aux),
+    )
+    .log_err();
 }
 
 /// Sets or clears the ICCCM WM_HINTS urgency flag, preserving the other hints.
@@ -881,6 +908,8 @@ impl X11WindowState {
                 client_side_decorations_supported,
                 decorations: WindowDecorations::Server,
                 last_insets: [0, 0, 0, 0],
+                insets_applied: false,
+                keep_position: params.keep_position,
                 edge_constraints: None,
                 accesskit_adapter: None,
                 counter_id: sync_request_counter,
@@ -1923,6 +1952,7 @@ impl PlatformWindow for X11Window {
             [left, right, top, bottom]
         };
 
+        let first = !std::mem::replace(&mut state.insets_applied, true);
         if state.last_insets != insets {
             state.last_insets = insets;
 
@@ -1939,6 +1969,10 @@ impl PlatformWindow for X11Window {
                 ),
             )
             .log_err();
+            // after the extents, so a window manager that grows the window for them sees the request as including them
+            if first {
+                grow_by_insets(&self.0.xcb, self.0.x_window, &state, insets);
+            }
         }
     }
 
