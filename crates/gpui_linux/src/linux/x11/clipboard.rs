@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a clipboard offering text and an image
+// gives both. See this repository's git log for the changes.
+
 /*
  * Copyright 2022 - 2025 Zed Industries, Inc.
  * License: Apache-2.0
@@ -49,6 +52,8 @@ use x11rb::{
 
 use gpui::{ClipboardItem, Image, ImageFormat, hash};
 use strum::IntoEnumIterator;
+
+use crate::linux::platform::combined_clipboard;
 
 type Result<T, E = Error> = std::result::Result<T, E>;
 
@@ -1037,31 +1042,34 @@ impl Clipboard {
             self.inner.atoms.TEXT_MIME_UNKNOWN,
         ];
 
-        // image formats first, as they are more specific, and read will return the first
-        // format that the contents can be converted to
-        let mut format_atoms = Vec::with_capacity(image_entries.len() + text_format_atoms.len());
-        format_atoms.extend(image_entries.iter().map(|(atom, _)| *atom));
-        format_atoms.extend_from_slice(text_format_atoms);
+        // an owner may offer the same content as an image and as text (an office app's cells): both are read, so
+        // the reader can choose
+        let image_atoms = image_entries.iter().map(|(atom, _)| *atom).collect::<Vec<_>>();
+        let image = self.inner.read(&image_atoms, selection).ok().and_then(|result| {
+            log::trace!(
+                "read clipboard as format {:?}",
+                self.inner.atom_name(result.format)
+            );
+            let (_, format) = image_entries
+                .iter()
+                .find(|(atom, _)| *atom == result.format)?;
+            let bytes = result.bytes;
+            let id = hash(&bytes);
+            Some(ClipboardItem::new_image(&Image {
+                id,
+                format: *format,
+                bytes,
+            }))
+        });
+        let text = match self.inner.read(text_format_atoms, selection) {
+            Ok(result) => Some(self.text_item(result)?),
+            Err(_) if image.is_some() => None,
+            Err(error) => return Err(error),
+        };
+        combined_clipboard(text, image).ok_or(Error::ConversionFailure)
+    }
 
-        let result = self.inner.read(&format_atoms, selection)?;
-
-        log::trace!(
-            "read clipboard as format {:?}",
-            self.inner.atom_name(result.format)
-        );
-
-        for (format_atom, image_format) in image_entries {
-            if result.format == format_atom {
-                let bytes = result.bytes;
-                let id = hash(&bytes);
-                return Ok(ClipboardItem::new_image(&Image {
-                    id,
-                    format: image_format,
-                    bytes,
-                }));
-            }
-        }
-
+    fn text_item(&self, result: ClipboardData) -> Result<ClipboardItem> {
         let text = if result.format == self.inner.atoms.STRING {
             // ISO Latin-1
             // See: https://stackoverflow.com/questions/28169745/what-are-the-options-to-convert-iso-8859-1-latin-1-to-a-string-utf-8

@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a clipboard offering text and an image
+// gives both. See this repository's git log for the changes.
+
 use std::{
     fs::File,
     io::{ErrorKind, Write},
@@ -10,7 +13,7 @@ use strum::IntoEnumIterator;
 use wayland_client::{Connection, protocol::wl_data_offer::WlDataOffer};
 use wayland_protocols::wp::primary_selection::zv1::client::zwp_primary_selection_offer_v1::ZwpPrimarySelectionOfferV1;
 
-use crate::linux::platform::{PIPE_READ_TIMEOUT, read_fd_with_timeout};
+use crate::linux::platform::{PIPE_READ_TIMEOUT, combined_clipboard, read_fd_with_timeout};
 use gpui::{ClipboardEntry, ClipboardItem, Image, ImageFormat, hash};
 
 /// Text mime types that we'll offer to other programs.
@@ -200,9 +203,12 @@ impl Clipboard {
             return self.contents.clone();
         }
 
-        let item = offer
-            .read_text(&self.connection)
-            .or_else(|| offer.read_image(&self.connection))?;
+        // an owner may offer the same content as text and as an image (an office app's cells): both are read, so
+        // the reader can choose
+        let item = combined_clipboard(
+            offer.read_text(&self.connection),
+            offer.read_image(&self.connection),
+        )?;
 
         self.cached_read = Some(item.clone());
         Some(item)
@@ -218,9 +224,12 @@ impl Clipboard {
             return self.primary_contents.clone();
         }
 
-        let item = offer
-            .read_text(&self.connection)
-            .or_else(|| offer.read_image(&self.connection))?;
+        // an owner may offer the same content as text and as an image (an office app's cells): both are read, so
+        // the reader can choose
+        let item = combined_clipboard(
+            offer.read_text(&self.connection),
+            offer.read_image(&self.connection),
+        )?;
 
         self.cached_primary_read = Some(item.clone());
         Some(item)

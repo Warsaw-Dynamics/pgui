@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a clipboard offering text and an image
+// gives both. See this repository's git log for the changes.
+
 use std::{
     cell::RefCell,
     env,
@@ -1698,6 +1701,14 @@ async fn await_idle_sleep_prevention(
     }
 }
 
+/// The text and the image a clipboard owner offers, as one item with the text entry first; either alone as is.
+pub(crate) fn combined_clipboard(text: Option<ClipboardItem>, image: Option<ClipboardItem>) -> Option<ClipboardItem> {
+    match (text, image) {
+        (Some(text), Some(image)) => Some(ClipboardItem { entries: text.into_entries().chain(image.into_entries()).collect() }),
+        (text, image) => text.or(image),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2116,5 +2127,38 @@ mod display_mode_tests {
             format!("{error:#}").contains(expected),
             "expected an error containing {expected:?}, got: {error:#}"
         );
+    }
+}
+
+#[cfg(test)]
+mod combined_clipboard_tests {
+    use gpui::{ClipboardEntry, ClipboardItem, Image, ImageFormat};
+
+    use super::combined_clipboard;
+
+    fn image() -> ClipboardItem {
+        ClipboardItem::new_image(&Image::from_bytes(ImageFormat::Png, vec![1, 2, 3]))
+    }
+
+    #[test]
+    fn combines_text_and_image_entries_text_first() {
+        let combined = combined_clipboard(Some(ClipboardItem::new_string("cells".into())), Some(image())).unwrap();
+
+        assert_eq!(combined.text().as_deref(), Some("cells"));
+        assert!(matches!(combined.entries(), [ClipboardEntry::String(_), ClipboardEntry::Image(_)]));
+    }
+
+    #[test]
+    fn keeps_a_single_kind_as_is() {
+        let text = combined_clipboard(Some(ClipboardItem::new_string("t".into())), None).unwrap();
+        let image = combined_clipboard(None, Some(image())).unwrap();
+
+        assert!(matches!(text.entries(), [ClipboardEntry::String(_)]));
+        assert!(matches!(image.entries(), [ClipboardEntry::Image(_)]));
+    }
+
+    #[test]
+    fn gives_none_for_nothing() {
+        assert!(combined_clipboard(None, None).is_none());
     }
 }
