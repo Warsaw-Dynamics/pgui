@@ -1,6 +1,6 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can keep the position it is
-// opened at on X11, be moved on X11, and be a drag image (WindowKind::DragImage). See this repository's git log
-// for the changes.
+// opened at on X11, be moved on X11, be a drag image (WindowKind::DragImage), and be drawn to an image outside
+// tests (render_to_image). See this repository's git log for the changes.
 
 mod app_menu;
 mod keyboard;
@@ -54,7 +54,6 @@ use anyhow::{Context as _, Result};
 use async_task::Runnable;
 use collections::FxHashMap;
 use futures::channel::oneshot;
-#[cfg(any(test, feature = "test-support", feature = "bench-support"))]
 use image::RgbaImage;
 use image::codecs::gif::GifDecoder;
 use image::{AnimationDecoder as _, DynamicImage, Frame};
@@ -1410,7 +1409,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     /// Renders the given scene to a texture and returns the pixel data as an RGBA image.
     /// This does not present the frame to screen - useful for visual testing where we want
     /// to capture what would be rendered without displaying it or requiring the window to be visible.
-    #[cfg(any(test, feature = "test-support"))]
     fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
         anyhow::bail!("render_to_image not implemented for this platform")
     }

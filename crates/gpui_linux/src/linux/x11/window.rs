@@ -1,6 +1,7 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): windows opened without focus are not
 // focused when mapped, a window can keep the position it is opened at, can be moved (a move alone is not a
-// resize), can be a drag image, and client decorations keep its size. See this repository's git log for the changes.
+// resize), can be a drag image, client decorations keep its size, and it can be drawn to an image
+// (render_to_image). See this repository's git log for the changes.
 
 use anyhow::{Context as _, anyhow};
 use x11rb::connection::RequestConnection;
@@ -1830,6 +1831,14 @@ impl PlatformWindow for X11Window {
 
     fn on_button_layout_changed(&self, callback: Box<dyn FnMut()>) {
         self.0.callbacks.borrow_mut().button_layout_changed = Some(callback);
+    }
+
+    fn render_to_image(&self, scene: &Scene) -> anyhow::Result<image::RgbaImage> {
+        let mut inner = self.0.state.borrow_mut();
+        let Some(renderer) = &mut inner.renderer else {
+            anyhow::bail!("render_to_image: the window has no renderer");
+        };
+        renderer.render_to_image(scene)
     }
 
     fn draw(&self, scene: &Scene) {

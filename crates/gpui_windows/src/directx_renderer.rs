@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): render_to_image outside tests. See this
+// repository's git log for the changes.
+
 use std::{
     slice,
     sync::{Arc, OnceLock},
@@ -409,7 +412,6 @@ impl DirectXRenderer {
     /// goes through MetalRenderer; this is the Windows analogue). Draws into
     /// the existing render target, copies it into a `D3D11_USAGE_STAGING`
     /// texture, maps it, and converts BGRA to RGBA.
-    #[cfg(any(test, feature = "test-support"))]
     pub(crate) fn render_to_image(
         &mut self,
         scene: &Scene,

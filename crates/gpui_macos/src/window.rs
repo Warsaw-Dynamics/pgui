@@ -1,5 +1,5 @@
-// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage. See this
-// repository's git log for the changes.
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage, and
+// render_to_image outside tests. See this repository's git log for the changes.
 
 use crate::{
     BoolExt, MacDisplay, NSRange, NSStringExt, TISCopyCurrentKeyboardInputSource,
@@ -7,7 +7,6 @@ use crate::{
     kTISPropertyInputSourceIsASCIICapable, kTISPropertyInputSourceType, kTISTypeKeyboardInputMode,
     ns_string, renderer,
 };
-#[cfg(any(test, feature = "test-support"))]
 use anyhow::Result;
 use block2::RcBlock;
 use cocoa::{
@@ -36,7 +35,6 @@ use gpui::{
     SharedString, Size, SystemWindowTab, WindowAppearance, WindowBackgroundAppearance,
     WindowBounds, WindowControlArea, WindowKind, WindowParams, WindowVisibility, point, px, size,
 };
-#[cfg(any(test, feature = "test-support"))]
 use image::RgbaImage;
 
 use core_foundation::base::{CFRelease, CFTypeRef};
@@ -2363,7 +2361,6 @@ impl PlatformWindow for MacWindow {
         NSBeep()
     }
 
-    #[cfg(any(test, feature = "test-support"))]
     fn render_to_image(&self, scene: &gpui::Scene) -> Result<RgbaImage> {
         let mut this = self.0.lock();
         this.renderer.render_to_image(scene)

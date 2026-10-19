@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can be drawn to an
+// image (render_to_image). See this repository's git log for the changes.
+
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
     ffi::c_void,
@@ -2006,6 +2009,14 @@ impl PlatformWindow for WaylandWindow {
 
     fn on_button_layout_changed(&self, callback: Box<dyn FnMut()>) {
         self.0.callbacks.borrow_mut().button_layout_changed = Some(callback);
+    }
+
+    fn render_to_image(&self, scene: &Scene) -> anyhow::Result<image::RgbaImage> {
+        let mut state = self.borrow_mut();
+        let Some(renderer) = &mut state.renderer else {
+            anyhow::bail!("render_to_image: the window has no renderer");
+        };
+        renderer.render_to_image(scene)
     }
 
     fn draw(&self, scene: &Scene) {

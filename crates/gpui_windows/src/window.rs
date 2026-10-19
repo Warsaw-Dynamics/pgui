@@ -1,5 +1,5 @@
-// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage. See this
-// repository's git log for the changes.
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage, and
+// render_to_image outside tests. See this repository's git log for the changes.
 
 #![deny(unsafe_op_in_unsafe_fn)]
 
@@ -1044,7 +1044,6 @@ impl PlatformWindow for WindowsWindow {
             .log_err();
     }
 
-    #[cfg(any(test, feature = "test-support"))]
     fn render_to_image(&self, scene: &Scene) -> anyhow::Result<image::RgbaImage> {
         self.state
             .renderer
