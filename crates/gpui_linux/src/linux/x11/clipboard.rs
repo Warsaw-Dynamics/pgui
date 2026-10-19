@@ -316,9 +316,15 @@ impl Inner {
                 Ok(ClipboardData { bytes, format }) => {
                     if format == self.atoms.ATOM {
                         let available_formats = Self::parse_formats(&bytes);
-                        formats
+                        let found = formats
                             .iter()
-                            .find(|format| available_formats.contains(format))
+                            .find(|format| available_formats.contains(format));
+                        // the owner listed what it offers and none of it is asked for: converting to each
+                        // format in turn would only fail, slowly with some owners
+                        if found.is_none() {
+                            return Err(Error::ContentNotAvailable);
+                        }
+                        found
                     } else {
                         log::trace!(
                             "Unexpected clipboard TARGETS format {}",
