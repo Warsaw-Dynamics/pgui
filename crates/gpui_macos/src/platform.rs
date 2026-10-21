@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): applicationShouldTerminate asks the
+// app first (on_quit_request, cancel_quit). See this repository's git log for the changes.
+
 use crate::{
     AppleActivity, AppleDispatcher, BoolExt, MacDisplay, MacKeyboardLayout, MacKeyboardMapper,
     MacWindow, events::key_to_native, ns_string, pasteboard::Pasteboard, renderer,
@@ -101,6 +104,10 @@ unsafe fn build_classes() {
                 should_handle_reopen as extern "C" fn(&mut Object, Sel, id, bool),
             );
             decl.add_method(
+                sel!(applicationShouldTerminate:),
+                should_terminate as extern "C" fn(&mut Object, Sel, id) -> NSUInteger,
+            );
+            decl.add_method(
                 sel!(applicationWillTerminate:),
                 will_terminate as extern "C" fn(&mut Object, Sel, id),
             );
@@ -195,6 +202,11 @@ pub(crate) struct MacPlatformState {
     on_system_wake: Option<Box<dyn FnMut()>>,
     system_power_observers_registered: bool,
     quit: Option<Box<dyn FnMut() -> bool>>,
+    quit_request: Option<Box<dyn FnMut() -> bool>>,
+    /// `App::quit` started the termination, so `applicationShouldTerminate:` lets it through without asking
+    quit_by_app: bool,
+    /// `applicationShouldTerminate:` answered `NSTerminateLater`; AppKit waits for a reply
+    quit_postponed: bool,
     menu_command: Option<Box<dyn FnMut(&dyn Action)>>,
     validate_menu_command: Option<Box<dyn FnMut(&dyn Action) -> bool>>,
     will_open_menu: Option<Box<dyn FnMut()>>,
@@ -258,6 +270,9 @@ impl MacPlatform {
             find_pasteboard: Pasteboard::find(),
             reopen: None,
             quit: None,
+            quit_request: None,
+            quit_by_app: false,
+            quit_postponed: false,
             menu_command: None,
             validate_menu_command: None,
             will_open_menu: None,
@@ -598,14 +613,30 @@ impl Platform for MacPlatform {
         // this, we make quitting the application asynchronous so that we aren't holding borrows to
         // the app state on the stack when we actually terminate the app.
 
+        let postponed = {
+            let mut state = self.0.lock();
+            state.quit_by_app = true;
+            std::mem::take(&mut state.quit_postponed)
+        };
         unsafe {
-            DispatchQueue::main().exec_async_f(ptr::null_mut(), quit);
+            if postponed {
+                DispatchQueue::main().exec_async_f(ptr::null_mut(), reply_quit);
+            } else {
+                DispatchQueue::main().exec_async_f(ptr::null_mut(), quit);
+            }
         }
 
         extern "C" fn quit(_: *mut c_void) {
             unsafe {
                 let app = NSApplication::sharedApplication(nil);
                 let _: () = msg_send![app, terminate: nil];
+            }
+        }
+
+        extern "C" fn reply_quit(_: *mut c_void) {
+            unsafe {
+                let app = NSApplication::sharedApplication(nil);
+                let _: () = msg_send![app, replyToApplicationShouldTerminate: YES];
             }
         }
     }
@@ -1064,6 +1095,19 @@ impl Platform for MacPlatform {
         self.0.lock().quit = Some(callback);
     }
 
+    fn on_quit_request(&self, callback: Box<dyn FnMut() -> bool>) {
+        self.0.lock().quit_request = Some(callback);
+    }
+
+    fn cancel_quit(&self) {
+        if std::mem::take(&mut self.0.lock().quit_postponed) {
+            unsafe {
+                let app = NSApplication::sharedApplication(nil);
+                let _: () = msg_send![app, replyToApplicationShouldTerminate: NO];
+            }
+        }
+    }
+
     fn on_reopen(&self, callback: Box<dyn FnMut()>) {
         self.0.lock().reopen = Some(callback);
     }
@@ -1376,6 +1420,32 @@ extern "C" fn should_handle_reopen(this: &mut Object, _: Sel, _: id, has_open_wi
             platform.0.lock().reopen.get_or_insert(callback);
         }
     }
+}
+
+const NS_TERMINATE_NOW: NSUInteger = 1;
+const NS_TERMINATE_LATER: NSUInteger = 2;
+
+/// A quit the app did not start (the Dock's Quit, logging out) asks the app's quit request callback first. A
+/// postponed one answers `NSTerminateLater`, not `NSTerminateCancel`, so logging out waits for the app instead of
+/// failing.
+extern "C" fn should_terminate(this: &mut Object, _: Sel, _: id) -> NSUInteger {
+    let platform = unsafe { get_mac_platform(this) };
+    let mut lock = platform.0.lock();
+    if lock.quit_by_app {
+        return NS_TERMINATE_NOW;
+    }
+    let Some(mut callback) = lock.quit_request.take() else {
+        return NS_TERMINATE_NOW;
+    };
+    drop(lock);
+    let now = callback();
+    let mut lock = platform.0.lock();
+    lock.quit_request.get_or_insert(callback);
+    if now {
+        return NS_TERMINATE_NOW;
+    }
+    lock.quit_postponed = true;
+    NS_TERMINATE_LATER
 }
 
 extern "C" fn will_terminate(this: &mut Object, _: Sel, _: id) {

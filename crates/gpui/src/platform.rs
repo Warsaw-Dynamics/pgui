@@ -1,6 +1,6 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can keep the position it is
-// opened at on X11, be moved on X11 and macOS, be a drag image (WindowKind::DragImage), and be drawn to an image
-// outside tests (render_to_image). See this repository's git log for the changes.
+// opened at on X11, be moved on X11 and macOS, be a drag image (WindowKind::DragImage), be drawn to an image
+// outside tests (render_to_image), and hear of a quit the system requests on macOS (on_quit_request). See this repository's git log for the changes.
 
 mod app_menu;
 mod keyboard;
@@ -458,6 +458,11 @@ pub trait Platform: 'static {
     fn open_with_system(&self, path: &Path);
 
     fn on_quit(&self, callback: Box<dyn FnMut() -> bool>);
+    /// Registers the callback asked whether a quit the system requested (the Dock's Quit, logging out) may go
+    /// ahead now; only macOS asks. See [`App::on_quit_request`].
+    fn on_quit_request(&self, _callback: Box<dyn FnMut() -> bool>) {}
+    /// Answers a quit request the callback of [`Platform::on_quit_request`] postponed: the app stays.
+    fn cancel_quit(&self) {}
     fn on_reopen(&self, callback: Box<dyn FnMut()>);
     /// Registers the callback invoked when the system is about to sleep.
     fn on_system_sleep(&self, callback: Box<dyn FnMut()>);

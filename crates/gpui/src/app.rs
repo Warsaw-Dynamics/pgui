@@ -1,3 +1,6 @@
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): App::on_quit_request and
+// App::cancel_quit. See this repository's git log for the changes.
+
 use scheduler::Instant;
 use std::{
     any::{TypeId, type_name},
@@ -1265,6 +1268,29 @@ impl App {
     /// Gracefully quit the application via the platform's standard routine.
     pub fn quit(&self) {
         self.platform.quit();
+    }
+
+    /// Asks `callback` whether a quit the system requests (on macOS the Dock's Quit, Cmd+Q in an app without a
+    /// menu of its own, logging out) may go ahead now. `false` postpones it: the app then calls [`App::quit`] to
+    /// go ahead, or [`App::cancel_quit`] to stay. [`App::quit`] itself never asks. Only macOS asks; elsewhere the
+    /// callback is never called.
+    pub fn on_quit_request(&self, mut callback: impl FnMut(&mut App) -> bool + 'static) {
+        let this = self.this.clone();
+        self.platform.on_quit_request(Box::new(move || {
+            let Some(app) = this.upgrade() else {
+                return true;
+            };
+            match app.try_borrow_mut() {
+                Ok(mut cx) => callback(&mut cx),
+                // the app is busy and cannot be asked; quitting is what the system asked for
+                Err(_) => true,
+            }
+        }));
+    }
+
+    /// Keeps the app running after a quit request [`App::on_quit_request`]'s callback postponed.
+    pub fn cancel_quit(&self) {
+        self.platform.cancel_quit();
     }
 
     /// Switches the platform between headless and windowed modes.
