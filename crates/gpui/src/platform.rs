@@ -1,6 +1,6 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can keep the position it is
-// opened at on X11, be moved on X11, be a drag image (WindowKind::DragImage), and be drawn to an image outside
-// tests (render_to_image). See this repository's git log for the changes.
+// opened at on X11, be moved on X11 and macOS, be a drag image (WindowKind::DragImage), and be drawn to an image
+// outside tests (render_to_image). See this repository's git log for the changes.
 
 mod app_menu;
 mod keyboard;
@@ -1341,7 +1341,7 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     #[cfg(all(target_os = "linux", feature = "wayland"))]
     fn set_exclusive_edge(&self, _edge: layer_shell::Anchor) {}
     fn set_input_region(&self, _region: Option<&[Bounds<Pixels>]>) {}
-    /// Moves the window's top left to `origin` on the screen; only X11 implements it.
+    /// Moves the window's top left to `origin` on the screen; only X11 and macOS implement it.
     fn move_to(&mut self, _origin: Point<Pixels>) {}
     fn window_decorations(&self) -> Decorations {
         Decorations::Server

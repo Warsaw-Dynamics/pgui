@@ -2928,8 +2928,8 @@ impl Window {
         self.platform_window.resize(size);
     }
 
-    /// Moves the window's top left to `origin` on the screen, e.g. a pop-up following the pointer. Only X11 moves
-    /// it; a window manager may still place a managed window elsewhere, a pop-up's position is kept.
+    /// Moves the window's top left to `origin` on the screen, e.g. a pop-up following the pointer. Only X11 and
+    /// macOS move it; an X11 window manager may still place a managed window elsewhere, a pop-up's position is kept.
     pub fn move_to(&mut self, origin: Point<Pixels>) {
         self.platform_window.move_to(origin);
     }

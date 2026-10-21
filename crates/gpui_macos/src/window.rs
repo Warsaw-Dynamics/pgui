@@ -1,4 +1,4 @@
-// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage, and
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage, move_to, and
 // render_to_image outside tests. See this repository's git log for the changes.
 
 use crate::{
@@ -1454,6 +1454,32 @@ impl PlatformWindow for MacWindow {
                         width: size.width.as_f32() as f64,
                         height: size.height.as_f32() as f64,
                     });
+                })
+            })
+            .detach();
+    }
+
+    fn move_to(&mut self, origin: Point<Pixels>) {
+        let this = self.0.lock();
+        let window = this.native_window;
+        let closed = this.closed.clone();
+        // later, as `resize`: AppKit calls the moved callback at once, while the caller still holds
+        // the app
+        this.foreground_executor
+            .spawn(async move {
+                if_window_not_closed(closed, || unsafe {
+                    // from the primary screen's top left, as `open` places a window on the primary
+                    // display; AppKit's y grows upward from its bottom
+                    let screens = NSScreen::screens(nil);
+                    let primary =
+                        NSScreen::frame(cocoa::foundation::NSArray::objectAtIndex(screens, 0));
+                    NSWindow::setFrameTopLeftPoint_(
+                        window,
+                        NSPoint::new(
+                            origin.x.as_f32() as f64,
+                            primary.size.height - origin.y.as_f32() as f64,
+                        ),
+                    );
                 })
             })
             .detach();
