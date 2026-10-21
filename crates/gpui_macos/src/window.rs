@@ -1,5 +1,5 @@
-// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage, move_to, and
-// render_to_image outside tests. See this repository's git log for the changes.
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage, move_to, hide,
+// and render_to_image outside tests. See this repository's git log for the changes.
 
 use crate::{
     BoolExt, MacDisplay, NSRange, NSStringExt, TISCopyCurrentKeyboardInputSource,
@@ -1979,6 +1979,22 @@ impl PlatformWindow for MacWindow {
         unsafe {
             window.miniaturize_(nil);
         }
+    }
+
+    fn hide(&self) {
+        let lock = self.0.lock();
+        let window = lock.native_window;
+        let closed = lock.closed.clone();
+        // later, as `activate`: AppKit tells the window's callbacks at once, while the caller still holds the app
+        lock.foreground_executor
+            .spawn(async move {
+                if !closed.load(Ordering::Acquire) {
+                    unsafe {
+                        let _: () = msg_send![window, orderOut: nil];
+                    }
+                }
+            })
+            .detach();
     }
 
     fn zoom(&self) {

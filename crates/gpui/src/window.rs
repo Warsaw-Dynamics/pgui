@@ -1,6 +1,6 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can keep the position it is
-// opened at on X11, be moved on X11 without being redrawn, and be drawn to an image outside tests
-// (render_to_image). See this repository's git log for the changes.
+// opened at on X11, be moved on X11 without being redrawn, be drawn to an image outside tests
+// (render_to_image), and be hidden without closing it on macOS (hide_window). See this repository's git log for the changes.
 
 #[cfg(feature = "profiler")]
 use crate::DebugFrameOverlayMode;
@@ -6698,6 +6698,12 @@ impl Window {
     /// Minimize the current window at the platform level.
     pub fn minimize_window(&self) {
         self.platform_window.minimize();
+    }
+
+    /// Hides the window without closing it, as a macOS app keeps running without its window, until
+    /// [`Window::activate_window`] shows it again. Only macOS hides it.
+    pub fn hide_window(&self) {
+        self.platform_window.hide();
     }
 
     /// Toggle full screen status on the current window at the platform level.
