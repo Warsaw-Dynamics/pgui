@@ -1,6 +1,7 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can keep the position it is
 // opened at on X11, be moved on X11 and macOS, be a drag image (WindowKind::DragImage), be drawn to an image
-// outside tests (render_to_image), and hear of a quit the system requests on macOS (on_quit_request). See this repository's git log for the changes.
+// outside tests (render_to_image), hear of a quit the system requests on macOS (on_quit_request), and have its
+// text gamma and contrast set at runtime (set_text_rendering). See this repository's git log for the changes.
 
 mod app_menu;
 mod keyboard;
@@ -1262,6 +1263,8 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn minimize(&self);
     /// Hides the window without closing it, until it is activated again; only macOS implements it.
     fn hide(&self) {}
+    /// Draws text with these parameters from the next frame on; only the wgpu renderer (Linux) implements it.
+    fn set_text_rendering(&self, _rendering: TextRendering) {}
     fn zoom(&self);
     fn toggle_fullscreen(&self);
     fn is_fullscreen(&self) -> bool;
@@ -1670,6 +1673,29 @@ impl PlatformTextSystem for NoopTextSystem {
         _font_size: Pixels,
     ) -> TextRenderingMode {
         TextRenderingMode::Grayscale
+    }
+}
+
+/// How glyph coverage becomes alpha on the wgpu renderer. Higher values draw text bolder; Zed's defaults are
+/// [`TextRendering::default`], which the `ZED_FONTS_GAMMA`, `ZED_FONTS_GRAYSCALE_ENHANCED_CONTRAST` and
+/// `ZED_FONTS_SUBPIXEL_ENHANCED_CONTRAST` environment variables override.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextRendering {
+    /// Alpha correction for the text's brightness, 1.0 (none) to 2.2.
+    pub gamma: f32,
+    /// Extra weight given to text darker than 75% brightness, drawn in grayscale; 0.0 is none.
+    pub grayscale_enhanced_contrast: f32,
+    /// As `grayscale_enhanced_contrast`, for text drawn with subpixel antialiasing.
+    pub subpixel_enhanced_contrast: f32,
+}
+
+impl Default for TextRendering {
+    fn default() -> Self {
+        Self {
+            gamma: 1.8,
+            grayscale_enhanced_contrast: 1.0,
+            subpixel_enhanced_contrast: 0.5,
+        }
     }
 }
 

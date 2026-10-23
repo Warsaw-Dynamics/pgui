@@ -1,5 +1,6 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can be drawn to an
-// image (render_to_image). See this repository's git log for the changes.
+// image (render_to_image), and its text gamma and contrast set at runtime (set_text_rendering). See this
+// repository's git log for the changes.
 
 use crate::{CompositorGpuHint, DeviceErrorState, WgpuAtlas, WgpuContext};
 use anyhow::{Context as _, Result};
@@ -7,7 +8,7 @@ use bytemuck::{Pod, Zeroable};
 use collections::FxHashMap;
 use gpui::{
     AtlasTextureId, Background, Bounds, DevicePixels, GpuSpecs, Path, Point, PrimitiveBatch,
-    ScaledPixels, Scene, Size, get_gamma_correction_ratios,
+    ScaledPixels, Scene, Size, TextRendering, get_gamma_correction_ratios,
 };
 use log::warn;
 #[cfg(not(target_family = "wasm"))]
@@ -260,6 +261,8 @@ pub struct WgpuRenderer {
     opaque_alpha_mode: wgpu::CompositeAlphaMode,
     max_texture_size: u32,
     is_bgr: bool,
+    /// Set by `set_text_rendering`, kept across device recovery; the environment's otherwise.
+    text_rendering: Option<TextRendering>,
     failed_frame_count: u32,
     device_errors: Arc<DeviceErrorState>,
     observed_error_generation: u64,
@@ -483,6 +486,7 @@ impl WgpuRenderer {
             opaque_alpha_mode,
             max_texture_size,
             is_bgr: false,
+            text_rendering: None,
             failed_frame_count: 0,
             device_errors: Arc::clone(context.errors()),
             observed_error_generation: 0,
@@ -1051,6 +1055,13 @@ impl WgpuRenderer {
         self.is_bgr = is_bgr;
         if let Some(core) = self.core_mut() {
             core.is_bgr = is_bgr;
+        }
+    }
+
+    pub fn set_text_rendering(&mut self, rendering: TextRendering) {
+        self.text_rendering = Some(rendering);
+        if let Some(core) = self.core_mut() {
+            core.rendering_params.set_text_rendering(rendering);
         }
     }
 
@@ -2304,6 +2315,7 @@ impl WgpuRenderer {
         self.atlas.handle_device_lost(context);
 
         let is_bgr = self.is_bgr;
+        let text_rendering = self.text_rendering;
         *self = Self::new_internal(
             Some(gpu_context.clone()),
             context,
@@ -2313,6 +2325,9 @@ impl WgpuRenderer {
             self.atlas.clone(),
         )?;
         self.set_subpixel_layout(is_bgr);
+        if let Some(rendering) = text_rendering {
+            self.set_text_rendering(rendering);
+        }
 
         log::info!("GPU recovery complete");
         Ok(())
@@ -2616,39 +2631,46 @@ struct RenderingParameters {
 
 impl RenderingParameters {
     fn new(adapter: &wgpu::Adapter, surface_format: wgpu::TextureFormat) -> Self {
-        use std::env;
-
         let format_features = adapter.get_texture_format_features(surface_format);
         let path_sample_count = [4, 2, 1]
             .into_iter()
             .find(|&n| format_features.flags.sample_count_supported(n))
             .unwrap_or(1);
-
-        let gamma = env::var("ZED_FONTS_GAMMA")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(1.8_f32)
-            .clamp(1.0, 2.2);
-        let gamma_ratios = get_gamma_correction_ratios(gamma);
-
-        let grayscale_enhanced_contrast = env::var("ZED_FONTS_GRAYSCALE_ENHANCED_CONTRAST")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(1.0_f32)
-            .max(0.0);
-
-        let subpixel_enhanced_contrast = env::var("ZED_FONTS_SUBPIXEL_ENHANCED_CONTRAST")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(0.5_f32)
-            .max(0.0);
-
-        Self {
+        let mut params = Self {
             path_sample_count,
-            gamma_ratios,
-            grayscale_enhanced_contrast,
-            subpixel_enhanced_contrast,
-        }
+            gamma_ratios: [0.0; 4],
+            grayscale_enhanced_contrast: 0.0,
+            subpixel_enhanced_contrast: 0.0,
+        };
+        params.set_text_rendering(text_rendering_from_env());
+        params
+    }
+
+    fn set_text_rendering(&mut self, rendering: TextRendering) {
+        self.gamma_ratios = get_gamma_correction_ratios(rendering.gamma.clamp(1.0, 2.2));
+        self.grayscale_enhanced_contrast = rendering.grayscale_enhanced_contrast.max(0.0);
+        self.subpixel_enhanced_contrast = rendering.subpixel_enhanced_contrast.max(0.0);
+    }
+}
+
+fn text_rendering_from_env() -> TextRendering {
+    fn read(name: &str, default: f32) -> f32 {
+        std::env::var(name)
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(default)
+    }
+    let defaults = TextRendering::default();
+    TextRendering {
+        gamma: read("ZED_FONTS_GAMMA", defaults.gamma),
+        grayscale_enhanced_contrast: read(
+            "ZED_FONTS_GRAYSCALE_ENHANCED_CONTRAST",
+            defaults.grayscale_enhanced_contrast,
+        ),
+        subpixel_enhanced_contrast: read(
+            "ZED_FONTS_SUBPIXEL_ENHANCED_CONTRAST",
+            defaults.subpixel_enhanced_contrast,
+        ),
     }
 }
 

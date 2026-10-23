@@ -1,6 +1,7 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can keep the position it is
 // opened at on X11, be moved on X11 without being redrawn, be drawn to an image outside tests
-// (render_to_image), and be hidden without closing it on macOS (hide_window). See this repository's git log for the changes.
+// (render_to_image), be hidden without closing it on macOS (hide_window), and have its text gamma and contrast
+// set at runtime (set_text_rendering). See this repository's git log for the changes.
 
 #[cfg(feature = "profiler")]
 use crate::DebugFrameOverlayMode;
@@ -23,10 +24,11 @@ use crate::{
     SUBPIXEL_VARIANTS_X, SUBPIXEL_VARIANTS_Y, ScaledPixels, Scene, Shadow, SharedString, Size,
     StrikethroughStyle, Style, SubpixelSprite, SubscriberSet, Subscription, SystemWindowTab,
     SystemWindowTabController, TabStopMap, TaffyLayoutEngine, Task, TextInputConfiguration,
-    TextInputStateChange, TextRenderingMode, TextStyle, TextStyleRefinement, ThermalState,
-    TransformationMatrix, Underline, UnderlineStyle, WindowAppearance, WindowBackgroundAppearance,
-    WindowBounds, WindowControls, WindowDecorations, WindowInsets, WindowOptions, WindowParams,
-    WindowTextSystem, WindowVisibility, point, prelude::*, px, rems, size, transparent_black,
+    TextInputStateChange, TextRendering, TextRenderingMode, TextStyle, TextStyleRefinement,
+    ThermalState, TransformationMatrix, Underline, UnderlineStyle, WindowAppearance,
+    WindowBackgroundAppearance, WindowBounds, WindowControls, WindowDecorations, WindowInsets,
+    WindowOptions, WindowParams, WindowTextSystem, WindowVisibility, point, prelude::*, px, rems,
+    size, transparent_black,
 };
 
 use crate::gestures::{GestureTuning, RecognizedTouchGesture, TouchGestureRecognizer};
@@ -1238,6 +1240,8 @@ pub struct Window {
     text_system: Arc<WindowTextSystem>,
     text_rendering_mode: Rc<Cell<TextRenderingMode>>,
     rem_size: Pixels,
+    /// the last [`Window::set_text_rendering`]; the platform's own until then
+    text_rendering: Option<TextRendering>,
     /// The stack of override values for the window's rem size.
     ///
     /// This is used by `with_rem_size` to allow rendering an element tree with
@@ -2152,6 +2156,7 @@ impl Window {
             text_system,
             text_rendering_mode: cx.text_rendering_mode.clone(),
             rem_size: px(16.),
+            text_rendering: None,
             rem_size_override_stack: SmallVec::new(),
             viewport_size: content_size,
             layout_engine: Some(TaffyLayoutEngine::new()),
@@ -6704,6 +6709,17 @@ impl Window {
     /// [`Window::activate_window`] shows it again. Only macOS hides it.
     pub fn hide_window(&self) {
         self.platform_window.hide();
+    }
+
+    /// Draws the window's text with `rendering` from the next frame on; only the wgpu renderer (Linux) applies it.
+    /// Setting the same parameters again does nothing, so a view can set them as it renders.
+    pub fn set_text_rendering(&mut self, rendering: TextRendering) {
+        if self.text_rendering == Some(rendering) {
+            return;
+        }
+        self.text_rendering = Some(rendering);
+        self.platform_window.set_text_rendering(rendering);
+        self.refresh();
     }
 
     /// Toggle full screen status on the current window at the platform level.

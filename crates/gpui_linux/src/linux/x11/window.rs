@@ -1,7 +1,8 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): windows opened without focus are not
 // focused when mapped, a window can keep the position it is opened at, can be moved (a move alone is not a
-// resize), can be a drag image, client decorations keep its size, and it can be drawn to an image
-// (render_to_image). See this repository's git log for the changes.
+// resize), can be a drag image, client decorations keep its size, it can be drawn to an image
+// (render_to_image), and its text gamma and contrast set at runtime (set_text_rendering). See this repository's
+// git log for the changes.
 
 use anyhow::{Context as _, anyhow};
 use x11rb::connection::RequestConnection;
@@ -11,9 +12,9 @@ use gpui::{
     AnyWindowHandle, Bounds, Decorations, DevicePixels, ForegroundExecutor, GpuSpecs, Modifiers,
     Pixels, PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow,
     Point, PromptButton, PromptLevel, RequestFrameOptions, ResizeEdge, ScaledPixels, Scene, Size,
-    Tiling, WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea,
-    WindowDecorations, WindowKind, WindowParams, WindowVisibility, popup::PopupNotSupportedError,
-    px,
+    TextRendering, Tiling, WindowAppearance, WindowBackgroundAppearance, WindowBounds,
+    WindowControlArea, WindowDecorations, WindowKind, WindowParams, WindowVisibility,
+    popup::PopupNotSupportedError, px,
 };
 use gpui_wgpu::{CompositorGpuHint, WgpuRenderer, WgpuSurfaceConfig};
 
@@ -1715,6 +1716,12 @@ impl PlatformWindow for X11Window {
 
     fn background_appearance(&self) -> WindowBackgroundAppearance {
         self.0.state.borrow().background_appearance
+    }
+
+    fn set_text_rendering(&self, rendering: TextRendering) {
+        if let Some(renderer) = &mut self.0.state.borrow_mut().renderer {
+            renderer.set_text_rendering(rendering);
+        }
     }
 
     fn is_subpixel_rendering_supported(&self) -> bool {

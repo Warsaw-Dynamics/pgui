@@ -1,5 +1,6 @@
 // Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): a window can be drawn to an
-// image (render_to_image). See this repository's git log for the changes.
+// image (render_to_image), and its text gamma and contrast set at runtime (set_text_rendering). See this
+// repository's git log for the changes.
 
 use std::{
     cell::{Cell, Ref, RefCell, RefMut},
@@ -40,9 +41,9 @@ use gpui::{
     AnyWindowHandle, Bounds, Capslock, Decorations, DevicePixels, ExternalDragPayload,
     FrameRequestSource, GpuSpecs, Modifiers, Pixels, PlatformAtlas, PlatformDisplay,
     PlatformFrameSignal, PlatformInput, PlatformInputHandler, PlatformWindow, Point, PromptButton,
-    PromptLevel, RequestFrameOptions, ResizeEdge, Scene, Size, Tiling, WindowAppearance,
-    WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowControls, WindowDecorations,
-    WindowKind, WindowParams, WindowVisibility,
+    PromptLevel, RequestFrameOptions, ResizeEdge, Scene, Size, TextRendering, Tiling,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowControls,
+    WindowDecorations, WindowKind, WindowParams, WindowVisibility,
     layer_shell::{Anchor, LayerShellNotSupportedError},
     popup::PopupOptions,
     px, size,
@@ -1916,6 +1917,12 @@ impl PlatformWindow for WaylandWindow {
 
     fn background_appearance(&self) -> WindowBackgroundAppearance {
         self.borrow().background_appearance
+    }
+
+    fn set_text_rendering(&self, rendering: TextRendering) {
+        if let Some(renderer) = &mut self.borrow_mut().renderer {
+            renderer.set_text_rendering(rendering);
+        }
     }
 
     fn is_subpixel_rendering_supported(&self) -> bool {
