@@ -1,4 +1,4 @@
-// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage, and
+// Modified by Warsaw Dynamics, 2026 (Apache License 2.0, section 4(b)): WindowKind::DragImage, move_to, and
 // render_to_image outside tests. See this repository's git log for the changes.
 
 #![deny(unsafe_op_in_unsafe_fn)]
@@ -492,7 +492,13 @@ impl WindowsWindow {
                 .unwrap_or(""),
         );
 
-        let (mut dwexstyle, dwstyle) = if matches!(params.kind, WindowKind::PopUp | WindowKind::DragImage) {
+        let (mut dwexstyle, dwstyle) = if params.kind == WindowKind::DragImage {
+            // under the pointer during a drag: it takes neither clicks nor focus
+            (
+                WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT,
+                WINDOW_STYLE(0x0),
+            )
+        } else if params.kind == WindowKind::PopUp {
             (WS_EX_TOOLWINDOW | WS_EX_TOPMOST, WINDOW_STYLE(0x0))
         } else {
             let mut dwstyle = WS_SYSMENU;
@@ -674,6 +680,33 @@ impl PlatformWindow for WindowsWindow {
                         SWP_NOMOVE,
                     )
                     .context("unable to set window content size")
+                    .log_err();
+                }
+            })
+            .detach();
+    }
+
+    fn move_to(&mut self, origin: Point<Pixels>) {
+        let hwnd = self.0.hwnd;
+        let bounds = gpui::bounds(origin, self.bounds().size).to_device_pixels(self.scale_factor());
+        let rect = calculate_window_rect(bounds, &self.state.border_offset);
+
+        // later, as `resize`: SetWindowPos sends WM_MOVE before it returns, while the caller still
+        // holds the app
+        self.0
+            .executor
+            .spawn(async move {
+                unsafe {
+                    SetWindowPos(
+                        hwnd,
+                        None,
+                        rect.left,
+                        rect.top,
+                        0,
+                        0,
+                        SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+                    )
+                    .context("unable to move window")
                     .log_err();
                 }
             })
